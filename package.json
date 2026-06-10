@@ -16,7 +16,8 @@
   "homepage": "https://emailsherlock.com/api",
   "author": {
     "name": "EmailSherlock",
-    "url": "https://emailsherlock.com"
+    "url": "https://emailsherlock.com",
+    "email": "service@emailsherlock.com"
   },
   "repository": {
     "type": "git",
