@@ -1,9 +1,6 @@
 import type {
-	ICredentialsDecrypted,
-	ICredentialTestFunctions,
 	IDataObject,
 	IExecuteFunctions,
-	INodeCredentialTestResult,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
@@ -99,7 +96,6 @@ export class EmailSherlock implements INodeType {
 			{
 				name: 'emailSherlockApi',
 				required: true,
-				testedBy: 'emailSherlockApiTest',
 			},
 		],
 		properties: [
@@ -154,38 +150,6 @@ export class EmailSherlock implements INodeType {
 				},
 			},
 		],
-	};
-
-	methods = {
-		credentialTest: {
-			// Sends an intentionally empty body: authentication runs before request
-			// validation, so a valid key answers 400 invalid_request without spending
-			// a credit, while a bad key answers 401.
-			async emailSherlockApiTest(
-				this: ICredentialTestFunctions,
-				credential: ICredentialsDecrypted,
-			): Promise<INodeCredentialTestResult> {
-				const apiKey = (credential.data as IDataObject)?.apiKey as string;
-				try {
-					const response = (await this.helpers.request({
-						method: 'POST',
-						uri: `${BASE_URL}/v1/verify/single`,
-						headers: { 'X-API-Key': apiKey },
-						body: {},
-						json: true,
-						simple: false,
-						resolveWithFullResponse: true,
-					})) as { statusCode: number };
-
-					if (response.statusCode === 401 || response.statusCode === 403) {
-						return { status: 'Error', message: 'The API key was rejected' };
-					}
-					return { status: 'OK', message: 'Authentication successful' };
-				} catch (error) {
-					return { status: 'Error', message: (error as Error).message };
-				}
-			},
-		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {

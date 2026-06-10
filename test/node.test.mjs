@@ -146,8 +146,14 @@ test('empty email fails with a clear message', async () => {
 	);
 });
 
-test('credential and node wiring matches the package manifest', () => {
+test('credential and node wiring matches the package manifest', async () => {
+	const { EmailSherlockApi } = await import('./helpers.mjs');
+	const credential = new EmailSherlockApi();
 	assert.equal(node.description.credentials[0].name, 'emailSherlockApi');
 	assert.equal(node.description.name, 'emailSherlock');
-	assert.equal(typeof node.methods.credentialTest.emailSherlockApiTest, 'function');
+	assert.equal(credential.name, 'emailSherlockApi');
+	// The n8n verification scanner requires a declarative credential test.
+	assert.equal(credential.test.request.url, '/v1/verify/single');
+	assert.equal(credential.test.request.baseURL, 'https://api.emailsherlock.com');
+	assert.deepEqual(credential.test.request.body, { email: 'valid@example.com' });
 });

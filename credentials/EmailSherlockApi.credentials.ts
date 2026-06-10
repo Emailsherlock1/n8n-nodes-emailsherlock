@@ -1,5 +1,6 @@
 import type {
 	IAuthenticateGeneric,
+	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
@@ -31,6 +32,19 @@ export class EmailSherlockApi implements ICredentialType {
 		properties: {
 			headers: {
 				'X-API-Key': '={{$credentials.apiKey}}',
+			},
+		},
+	};
+
+	// Verifies one address to validate the key. Free with a sandbox key
+	// (es_test_, deterministic fixture); costs one credit with a live key.
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL: 'https://api.emailsherlock.com',
+			url: '/v1/verify/single',
+			method: 'POST',
+			body: {
+				email: 'valid@example.com',
 			},
 		},
 	};

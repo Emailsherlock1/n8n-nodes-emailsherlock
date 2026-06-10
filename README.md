@@ -23,7 +23,7 @@ Two key types exist:
 - `es_live_` keys verify real addresses and spend credits.
 - `es_test_` sandbox keys return deterministic fixtures, spend nothing, and are made for building your workflow before you go live. See [Sandbox testing](#sandbox-testing).
 
-The credential test does not spend credits.
+The credential test verifies one address (`valid@example.com`) to validate the key. With a sandbox key it answers from a fixture and spends nothing; with a live key it costs one credit.
 
 ## Operations
 

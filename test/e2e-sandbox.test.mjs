@@ -80,24 +80,22 @@ test('servererror@ maps to the 503 retry-later message', { skip }, async () => {
 	);
 });
 
-test('credential test: sandbox key passes, garbage key fails, no credits spent', { skip }, async () => {
-	const testFn = node.methods.credentialTest.emailSherlockApiTest;
-	const fakeCtx = {
-		helpers: {
-			async request(options) {
-				const res = await fetch(rewriteUrl(options.uri), {
-					method: options.method,
-					headers: { 'Content-Type': 'application/json', ...options.headers, ...extraHeaders },
-					body: JSON.stringify(options.body),
-				});
-				return { statusCode: res.status, body: await res.json().catch(() => ({})) };
-			},
-		},
-	};
+test('credential test request: sandbox key answers 200, garbage key 401', { skip }, async () => {
+	const { EmailSherlockApi } = await import('./helpers.mjs');
+	const { request } = new EmailSherlockApi().test;
 
-	const ok = await testFn.call(fakeCtx, { data: { apiKey: KEY } });
-	assert.equal(ok.status, 'OK');
+	// Execute the declarative test request the way n8n would: request shape
+	// from the credential's test block, auth header from authenticate.
+	const run = async (apiKey) =>
+		fetch(rewriteUrl(`${request.baseURL}${request.url}`), {
+			method: request.method,
+			headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey, ...extraHeaders },
+			body: JSON.stringify(request.body),
+		});
 
-	const bad = await testFn.call(fakeCtx, { data: { apiKey: 'es_test_not_a_real_key' } });
-	assert.equal(bad.status, 'Error');
+	const ok = await run(KEY);
+	assert.equal(ok.status, 200);
+
+	const bad = await run('es_test_not_a_real_key');
+	assert.equal(bad.status, 401);
 });
