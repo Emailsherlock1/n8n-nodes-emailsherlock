@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-emailsherlock.emailSherlock",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Communication", "Utility"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://emailsherlock.com/api/docs"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/Emailsherlock1/n8n-nodes-emailsherlock#readme"
+			}
+		]
+	}
+}
