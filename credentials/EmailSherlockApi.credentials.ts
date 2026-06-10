@@ -36,16 +36,13 @@ export class EmailSherlockApi implements ICredentialType {
 		},
 	};
 
-	// Verifies one address to validate the key. Free with a sandbox key
-	// (es_test_, deterministic fixture); costs one credit with a live key.
+	// Validates the key against the zero-cost account-status endpoint: a 200
+	// proves the key works without spending a credit (live or sandbox).
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: 'https://api.emailsherlock.com',
-			url: '/v1/verify/single',
-			method: 'POST',
-			body: {
-				email: 'valid@example.com',
-			},
+			url: '/v1/credits',
+			method: 'GET',
 		},
 	};
 }

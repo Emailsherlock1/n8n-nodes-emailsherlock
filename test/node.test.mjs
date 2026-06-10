@@ -4,6 +4,23 @@ import { EmailSherlock, makeContext, stubResponse } from './helpers.mjs';
 
 const node = new EmailSherlock();
 
+// Stub that branches on the request method+path, for the multi-call job flow.
+function routedResponse(routes) {
+	return (options) => {
+		for (const [match, body] of routes) {
+			if (options.method === match.method && options.url.includes(match.path)) {
+				return Promise.resolve({ statusCode: 200, headers: {}, body });
+			}
+		}
+		throw new Error(`no stub for ${options.method} ${options.url}`);
+	};
+}
+
+// Params helper: per-operation parameter bag, looked up by name.
+function paramsFor(bag) {
+	return (name) => bag[name];
+}
+
 const validResult = {
 	email: 'jane@acme.com',
 	result: 'valid',
@@ -146,6 +163,134 @@ test('empty email fails with a clear message', async () => {
 	);
 });
 
+const jobCompleted = {
+	id: 'job-1',
+	status: 'completed',
+	total: 2,
+	progress: { total: 2, done: 2 },
+	results: [
+		{ email: 'a@acme.com', result: 'valid' },
+		{ email: 'nope@', error: 'invalid_email' },
+	],
+};
+
+test('submitJob: completed inline (no poll) splits results into items', async () => {
+	const ctx = makeContext({
+		params: paramsFor({
+			operation: 'submitJob',
+			emails: 'a@acme.com, nope@',
+			waitForCompletion: true,
+			maxWaitSeconds: 120,
+			splitResults: true,
+		}),
+		request: routedResponse([[{ method: 'POST', path: '/v1/verify/jobs' }, jobCompleted]]),
+	});
+
+	const [out] = await node.execute.call(ctx);
+	assert.equal(ctx.calls[0].options.method, 'POST');
+	assert.deepEqual(ctx.calls[0].options.body, { emails: ['a@acme.com', 'nope@'] });
+	assert.equal(out.length, 2);
+	assert.equal(out[0].json.result, 'valid');
+	assert.equal(out[1].json.error, 'invalid_email');
+	// Completed inline means exactly one HTTP call, no polling.
+	assert.equal(ctx.calls.length, 1);
+});
+
+test('submitJob: waitForCompletion=false returns the job object immediately', async () => {
+	const processing = { id: 'job-2', status: 'processing', total: 2, progress: { total: 2, done: 0 } };
+	const ctx = makeContext({
+		params: paramsFor({
+			operation: 'submitJob',
+			emails: 'a@acme.com, b@acme.com',
+			waitForCompletion: false,
+			splitResults: true,
+		}),
+		request: routedResponse([[{ method: 'POST', path: '/v1/verify/jobs' }, processing]]),
+	});
+
+	const [out] = await node.execute.call(ctx);
+	assert.equal(ctx.calls.length, 1);
+	assert.equal(out.length, 1);
+	assert.equal(out[0].json.id, 'job-2');
+	assert.equal(out[0].json.status, 'processing');
+});
+
+test('submitJob: polls a processing job until completed', async () => {
+	let getCalls = 0;
+	const ctx = makeContext({
+		params: paramsFor({
+			operation: 'submitJob',
+			emails: 'a@acme.com, nope@',
+			waitForCompletion: true,
+			maxWaitSeconds: 30,
+			splitResults: true,
+		}),
+		request: (options) => {
+			if (options.method === 'POST') {
+				return Promise.resolve({
+					statusCode: 200,
+					headers: {},
+					body: { id: 'job-1', status: 'processing', total: 2, progress: { total: 2, done: 0 } },
+				});
+			}
+			getCalls++;
+			return Promise.resolve({ statusCode: 200, headers: {}, body: jobCompleted });
+		},
+	});
+
+	const [out] = await node.execute.call(ctx);
+	assert.ok(getCalls >= 1, 'polled at least once');
+	assert.equal(out.length, 2);
+	assert.equal(out[1].json.error, 'invalid_email');
+});
+
+test('getJob: 404 maps to a no-such-job error', async () => {
+	const ctx = makeContext({
+		params: paramsFor({ operation: 'getJob', jobId: 'gone', splitResults: true }),
+		request: stubResponse(404, { error: { code: 'job_not_found', message: 'No such job.' } }),
+	});
+
+	await assert.rejects(
+		() => node.execute.call(ctx),
+		(e) => {
+			assert.match(e.message, /no such job/i);
+			return true;
+		},
+	);
+});
+
+test('getJob: splitResults=false returns the whole job object', async () => {
+	const ctx = makeContext({
+		params: paramsFor({ operation: 'getJob', jobId: 'job-1', splitResults: false }),
+		request: routedResponse([[{ method: 'GET', path: '/v1/verify/jobs/' }, jobCompleted]]),
+	});
+
+	const [out] = await node.execute.call(ctx);
+	assert.equal(ctx.calls[0].options.method, 'GET');
+	assert.equal(ctx.calls[0].options.url, 'https://api.emailsherlock.com/v1/verify/jobs/job-1');
+	assert.equal(out.length, 1);
+	assert.equal(out[0].json.status, 'completed');
+	assert.equal(out[0].json.progress.done, 2);
+});
+
+test('accountStatus: GET /v1/credits, spends nothing', async () => {
+	const ctx = makeContext({
+		params: paramsFor({ operation: 'accountStatus' }),
+		request: routedResponse([
+			[
+				{ method: 'GET', path: '/v1/credits' },
+				{ credits: { total: 1240, purchased: 1000, gifted: 240 }, rate_limit: { limit: 60, remaining: 59, reset: 1 }, plan: 'Free', sandbox: false },
+			],
+		]),
+	});
+
+	const [out] = await node.execute.call(ctx);
+	assert.equal(ctx.calls[0].options.method, 'GET');
+	assert.equal(ctx.calls[0].options.url, 'https://api.emailsherlock.com/v1/credits');
+	assert.equal(out[0].json.credits.total, 1240);
+	assert.equal(out[0].json.plan, 'Free');
+});
+
 test('credential and node wiring matches the package manifest', async () => {
 	const { EmailSherlockApi } = await import('./helpers.mjs');
 	const credential = new EmailSherlockApi();
@@ -153,7 +298,8 @@ test('credential and node wiring matches the package manifest', async () => {
 	assert.equal(node.description.name, 'emailSherlock');
 	assert.equal(credential.name, 'emailSherlockApi');
 	// The n8n verification scanner requires a declarative credential test.
-	assert.equal(credential.test.request.url, '/v1/verify/single');
+	// It hits the zero-cost account endpoint (no credit spent on a key check).
+	assert.equal(credential.test.request.url, '/v1/credits');
+	assert.equal(credential.test.request.method, 'GET');
 	assert.equal(credential.test.request.baseURL, 'https://api.emailsherlock.com');
-	assert.deepEqual(credential.test.request.body, { email: 'valid@example.com' });
 });

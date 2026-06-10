@@ -23,19 +23,35 @@ Two key types exist:
 - `es_live_` keys verify real addresses and spend credits.
 - `es_test_` sandbox keys return deterministic fixtures, spend nothing, and are made for building your workflow before you go live. See [Sandbox testing](#sandbox-testing).
 
-The credential test verifies one address (`valid@example.com`) to validate the key. With a sandbox key it answers from a fixture and spends nothing; with a live key it costs one credit.
+The credential test calls the account-status endpoint (`GET /v1/credits`) to validate the key. It spends no credits, live or sandbox.
 
 ## Operations
 
 ### Verify Email
 
-Verifies one address per input item. The output item is the full API response for that address.
+Verifies one address per input item, synchronously. The output item is the full API response for that address.
 
 ### Verify Batch
 
-Verifies a list of addresses in one request. The **Emails** field accepts addresses separated by commas or newlines, or an expression that resolves to an array, for example `{{ $json.recipients }}`. The node outputs one item per address, in the order you sent them. Addresses the API could not process come back as `{ "email": "...", "error": "invalid_email" }` items.
+Verifies a list of addresses in one synchronous request. The **Emails** field accepts addresses separated by commas or newlines, or an expression that resolves to an array, for example `{{ $json.recipients }}`. The node outputs one item per address, in the order you sent them. Addresses the API could not process come back as `{ "email": "...", "error": "invalid_email" }` items.
 
-Batch requests skip the live SMTP probe: addresses that need it answer `result=unknown` with `reason=verification_pending`, and the probe runs in the background. Verify the same address again after a short wait to get the final verdict from cache. See [Retrying transient results](#retrying-transient-results).
+Batch requests skip the live SMTP probe: addresses that need it answer `result=unknown` with `reason=verification_pending`, and the probe runs in the background. Verify the same address again after a short wait to get the final verdict from cache, or use a verification job. See [Retrying transient results](#retrying-transient-results).
+
+### Submit Verification Job
+
+For larger lists that need definitive inbox verdicts. Unlike Verify Batch, a job runs every address through the full pipeline including the SMTP probe, so the results carry real `valid`/`invalid` verdicts instead of `verification_pending`. Accepts up to 10000 addresses, charged per address at submit. Addresses that cannot be processed are refunded automatically.
+
+- **Wait for Completion** (default on): the node polls the job until it finishes and returns the results directly. **Max Wait** caps the polling; a job larger than the budget returns still processing, and you poll **Get Verification Job** yourself afterwards.
+- Turn **Wait for Completion** off to return the job id immediately. Drive the polling yourself, for example with a **Wait** node followed by **Get Verification Job** (the n8n-idiomatic pattern for long jobs).
+- **Split Results Into Items** (default on): one output item per address, in submit order. Off returns the whole job object (`id`, `status`, `progress`, `results`).
+
+### Get Verification Job
+
+Reads a job by its **Job ID**. Returns the status and, once the job completed, the per-address results. An unknown or expired id (jobs are kept 7 days) answers `404 No such job`.
+
+### Get Account Status
+
+Reads the credit balance, the key's rate-limit window and the plan. Spends no credits, so it is also the cheapest way to check that a key works (this is what the credential test uses).
 
 ## Output fields
 
@@ -49,7 +65,7 @@ Batch requests skip the live SMTP probe: addresses that need it answer `result=u
 | `mx_record` | string or null | The primary MX host, when one was resolved |
 | `disposable` | boolean | Throwaway or temporary-mail provider |
 | `role` | boolean | Role address such as `info@` or `sales@` |
-| `catch_all` | boolean | The host accepts mail for any local part |
+| `catch_all` | boolean | The host accepts mail for any local part. Always-accept hosts (mail.ru and similar) answer `result=catch_all` with `deliverable=null` rather than a misleading `valid` |
 | `free_email` | boolean or null | The domain is a freemail provider |
 | `score` | number or null | 0 to 1 confidence, higher is safer to send to |
 | `freshness` | string | `fresh`, `cached_recent` or `cached_stale_refreshed` |
@@ -80,6 +96,8 @@ Full reference: [emailsherlock.com/api/docs](https://emailsherlock.com/api/docs)
 ## Retrying transient results
 
 Four `reason` values are transient: `greylisted`, `smtp_timeout`, `smtp_unreachable` and `verification_pending`. The mailbox could not be probed to a final verdict yet, so a retry after a short wait usually resolves them.
+
+For lists, a verification job is usually the better fit: it runs the SMTP probe for every address up front, so the results are final and you avoid the retry loop entirely. The retry pattern below is for the synchronous single/batch path.
 
 A simple retry loop in n8n:
 
