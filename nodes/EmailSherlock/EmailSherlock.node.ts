@@ -8,9 +8,6 @@ import type {
 } from 'n8n-workflow';
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
-// Node global, declared locally so the package needs no @types/node dependency.
-declare const setTimeout: (callback: () => void, ms: number) => unknown;
-
 const BASE_URL = 'https://api.emailsherlock.com';
 
 function toEmailList(raw: unknown): string[] {
@@ -24,10 +21,6 @@ function toEmailList(raw: unknown): string[] {
 			.filter((entry) => entry.length > 0);
 	}
 	return [];
-}
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function apiRequest(
@@ -183,36 +176,6 @@ export class EmailSherlock implements INodeType {
 				},
 			},
 			{
-				displayName: 'Wait for Completion',
-				name: 'waitForCompletion',
-				type: 'boolean',
-				default: true,
-				description: 'Whether to poll the job until it finishes and return the results directly. Turn this off to return the job ID immediately and poll yourself (for example with a Wait node).',
-				displayOptions: {
-					show: {
-						operation: ['submitJob'],
-					},
-				},
-			},
-			{
-				displayName: 'Max Wait (Seconds)',
-				name: 'maxWaitSeconds',
-				type: 'number',
-				default: 120,
-				description:
-					'How long to keep polling before giving up and returning the unfinished job. A large job can take longer than this; in that case poll Get Verification Job yourself afterwards.',
-				typeOptions: {
-					minValue: 5,
-					maxValue: 900,
-				},
-				displayOptions: {
-					show: {
-						operation: ['submitJob'],
-						waitForCompletion: [true],
-					},
-				},
-			},
-			{
 				displayName: 'Job ID',
 				name: 'jobId',
 				type: 'string',
@@ -277,17 +240,11 @@ export class EmailSherlock implements INodeType {
 							itemIndex: i,
 						});
 					}
-					let job = await apiRequest.call(this, i, 'POST', '/v1/verify/jobs', { emails });
-
-					const waitForCompletion = this.getNodeParameter('waitForCompletion', i) as boolean;
-					if (waitForCompletion && job.status !== 'completed') {
-						job = await pollJob.call(
-							this,
-							i,
-							job.id as string,
-							this.getNodeParameter('maxWaitSeconds', i) as number,
-						);
-					}
+					// Returns immediately: a live job comes back "processing" (poll
+					// it with Get Verification Job, e.g. behind a Wait node — the
+					// n8n pattern for async work). A sandbox key answers
+					// "completed" inline with results, so the demo needs no wait.
+					const job = await apiRequest.call(this, i, 'POST', '/v1/verify/jobs', { emails });
 					pushJob.call(this, returnData, i, job);
 				} else if (operation === 'getJob') {
 					const jobId = (this.getNodeParameter('jobId', i) as string).trim();
@@ -322,38 +279,6 @@ export class EmailSherlock implements INodeType {
 
 		return [returnData];
 	}
-}
-
-/**
- * Poll a job until it completes or the wait budget runs out. Backs off from
- * 2s to 10s so a fast job returns quickly and a slow one does not hammer the
- * API. Returns the last job state seen (still "processing" on timeout).
- */
-async function pollJob(
-	this: IExecuteFunctions,
-	itemIndex: number,
-	jobId: string,
-	maxWaitSeconds: number,
-): Promise<IDataObject> {
-	const deadline = Date.now() + maxWaitSeconds * 1000;
-	let delayMs = 2000;
-	let job: IDataObject = { id: jobId, status: 'processing' };
-
-	while (Date.now() < deadline) {
-		await sleep(delayMs);
-		job = await apiRequest.call(
-			this,
-			itemIndex,
-			'GET',
-			`/v1/verify/jobs/${encodeURIComponent(jobId)}`,
-		);
-		if (job.status === 'completed') {
-			return job;
-		}
-		delayMs = Math.min(delayMs + 2000, 10000);
-	}
-
-	return job;
 }
 
 function pushJob(

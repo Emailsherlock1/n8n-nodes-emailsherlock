@@ -174,13 +174,11 @@ const jobCompleted = {
 	],
 };
 
-test('submitJob: completed inline (no poll) splits results into items', async () => {
+test('submitJob: a sandbox/completed job inline splits results into items', async () => {
 	const ctx = makeContext({
 		params: paramsFor({
 			operation: 'submitJob',
 			emails: 'a@acme.com, nope@',
-			waitForCompletion: true,
-			maxWaitSeconds: 120,
 			splitResults: true,
 		}),
 		request: routedResponse([[{ method: 'POST', path: '/v1/verify/jobs' }, jobCompleted]]),
@@ -192,56 +190,28 @@ test('submitJob: completed inline (no poll) splits results into items', async ()
 	assert.equal(out.length, 2);
 	assert.equal(out[0].json.result, 'valid');
 	assert.equal(out[1].json.error, 'invalid_email');
-	// Completed inline means exactly one HTTP call, no polling.
+	// Submit returns immediately — exactly one HTTP call, no in-node polling.
 	assert.equal(ctx.calls.length, 1);
 });
 
-test('submitJob: waitForCompletion=false returns the job object immediately', async () => {
+test('submitJob: a processing live job returns the job object immediately', async () => {
 	const processing = { id: 'job-2', status: 'processing', total: 2, progress: { total: 2, done: 0 } };
 	const ctx = makeContext({
 		params: paramsFor({
 			operation: 'submitJob',
 			emails: 'a@acme.com, b@acme.com',
-			waitForCompletion: false,
 			splitResults: true,
 		}),
 		request: routedResponse([[{ method: 'POST', path: '/v1/verify/jobs' }, processing]]),
 	});
 
 	const [out] = await node.execute.call(ctx);
+	// No poll: a still-processing job has no results yet, so the job object
+	// (with its id) is returned for a Get Verification Job follow-up.
 	assert.equal(ctx.calls.length, 1);
 	assert.equal(out.length, 1);
 	assert.equal(out[0].json.id, 'job-2');
 	assert.equal(out[0].json.status, 'processing');
-});
-
-test('submitJob: polls a processing job until completed', async () => {
-	let getCalls = 0;
-	const ctx = makeContext({
-		params: paramsFor({
-			operation: 'submitJob',
-			emails: 'a@acme.com, nope@',
-			waitForCompletion: true,
-			maxWaitSeconds: 30,
-			splitResults: true,
-		}),
-		request: (options) => {
-			if (options.method === 'POST') {
-				return Promise.resolve({
-					statusCode: 200,
-					headers: {},
-					body: { id: 'job-1', status: 'processing', total: 2, progress: { total: 2, done: 0 } },
-				});
-			}
-			getCalls++;
-			return Promise.resolve({ statusCode: 200, headers: {}, body: jobCompleted });
-		},
-	});
-
-	const [out] = await node.execute.call(ctx);
-	assert.ok(getCalls >= 1, 'polled at least once');
-	assert.equal(out.length, 2);
-	assert.equal(out[1].json.error, 'invalid_email');
 });
 
 test('getJob: 404 maps to a no-such-job error', async () => {
