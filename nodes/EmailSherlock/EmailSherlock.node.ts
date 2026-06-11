@@ -85,7 +85,7 @@ export class EmailSherlock implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'EmailSherlock',
 		name: 'emailSherlock',
-		icon: 'file:emailsherlock.svg',
+		icon: { light: 'file:emailsherlock.svg', dark: 'file:emailsherlock-dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
