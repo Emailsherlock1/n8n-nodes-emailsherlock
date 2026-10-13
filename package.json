@@ -13,11 +13,11 @@
     "disposable"
   ],
   "license": "MIT",
-  "homepage": "https://emailsherlock.com/api",
+  "homepage": "https://www.hostsherlock.com/api",
   "author": {
     "name": "EmailSherlock",
-    "url": "https://emailsherlock.com",
-    "email": "service@emailsherlock.com"
+    "url": "https://www.hostsherlock.com",
+    "email": "service@hostsherlock.com"
   },
   "repository": {
     "type": "git",
