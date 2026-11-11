@@ -23,6 +23,30 @@ function toEmailList(raw: unknown): string[] {
 	return [];
 }
 
+// Reads the optional Client ID from the Options collection. Returns null when
+// it is empty or 0, so the header is never sent with an empty value. A value
+// that is set but not a positive integer fails loudly instead of being dropped.
+function readClientId(this: IExecuteFunctions, itemIndex: number): string | null {
+	const options = this.getNodeParameter('options', itemIndex, {});
+	if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+		return null;
+	}
+	const raw = (options as IDataObject).clientId;
+	if (raw === undefined || raw === null || String(raw).trim() === '') {
+		return null;
+	}
+	const value = Number(String(raw).trim());
+	if (value === 0) {
+		return null;
+	}
+	if (!Number.isInteger(value) || value < 0) {
+		throw new NodeOperationError(this.getNode(), 'The Client ID must be a positive whole number', {
+			itemIndex,
+		});
+	}
+	return String(value);
+}
+
 async function apiRequest(
 	this: IExecuteFunctions,
 	itemIndex: number,
@@ -30,14 +54,20 @@ async function apiRequest(
 	path: string,
 	body?: IDataObject,
 ): Promise<IDataObject> {
-	const response = (await this.helpers.httpRequestWithAuthentication.call(this, 'emailSherlockApi', {
-		method,
-		url: `${BASE_URL}${path}`,
-		body,
-		json: true,
-		returnFullResponse: true,
-		ignoreHttpStatusErrors: true,
-	})) as { statusCode: number; headers: IDataObject; body: IDataObject };
+	const clientId = readClientId.call(this, itemIndex);
+	const response = (await this.helpers.httpRequestWithAuthentication.call(
+		this,
+		'emailSherlockApi',
+		{
+			method,
+			url: `${BASE_URL}${path}`,
+			body,
+			headers: clientId === null ? undefined : { 'X-Client-Id': clientId },
+			json: true,
+			returnFullResponse: true,
+			ignoreHttpStatusErrors: true,
+		},
+	)) as { statusCode: number; headers: IDataObject; body: IDataObject };
 
 	const { statusCode, headers } = response;
 	const data = response.body ?? {};
@@ -50,7 +80,20 @@ async function apiRequest(
 	let message = (apiError.message as string) ?? 'The EmailSherlock API returned an error';
 	let description: string | undefined;
 
-	if (statusCode === 401 || statusCode === 403) {
+	const errorCode = apiError.code as string | undefined;
+
+	if (statusCode === 404 && errorCode === 'client_not_found') {
+		message = 'Unknown Client ID';
+		description =
+			"The Client ID field names a tenant this API key cannot reach. Check the id, or leave the field empty to work in the key's own account.";
+	} else if (statusCode === 400 && errorCode === 'client_id_not_allowed') {
+		message = 'This API key cannot use a Client ID';
+		description =
+			"Only a provider account's key may send a Client ID. Leave the Client ID field empty, or use a provider key.";
+	} else if (statusCode === 403 && errorCode === 'forbidden') {
+		message = 'The tenant named in the Client ID field is blocked from the API';
+		description = 'Check the tenant in your provider account, or use a different Client ID.';
+	} else if (statusCode === 401 || statusCode === 403) {
 		message = 'The API key was rejected';
 		description = 'Check the EmailSherlock credential. Keys are managed at emailsherlock.com/api.';
 	} else if (statusCode === 402) {
@@ -188,6 +231,24 @@ export class EmailSherlock implements INodeType {
 						operation: ['getJob'],
 					},
 				},
+			},
+			{
+				displayName: 'Options',
+				name: 'options',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				options: [
+					{
+						displayName: 'Client ID',
+						name: 'clientId',
+						type: 'number',
+						typeOptions: { minValue: 0 },
+						default: 0,
+						description:
+							"The numeric ID of one of your tenants. Only for a provider account's key. Leave empty to work in the key's own account. Get Verification Job needs the same value the job was submitted with.",
+					},
+				],
 			},
 			{
 				displayName: 'Split Results Into Items',

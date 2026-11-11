@@ -273,3 +273,88 @@ test('credential and node wiring matches the package manifest', async () => {
 	assert.equal(credential.test.request.method, 'GET');
 	assert.equal(credential.test.request.baseURL, 'https://api.emailsherlock.com');
 });
+
+// ---- Client ID (X-Client-Id) ----
+
+function clientParams(bag) {
+	return (name) => bag[name];
+}
+
+for (const [label, options] of [
+	['absent', undefined],
+	['empty collection', {}],
+	['empty string', { clientId: '' }],
+	['zero', { clientId: 0 }],
+]) {
+	test(`Client ID ${label}: no X-Client-Id header`, async () => {
+		const ctx = makeContext({
+			params: clientParams({ operation: 'accountStatus', options }),
+			request: stubResponse(200, { credits: 1 }),
+		});
+		await node.execute.call(ctx);
+		assert.equal(ctx.calls[0].options.headers, undefined);
+	});
+}
+
+test('Client ID set: header is sent on a verify call', async () => {
+	const ctx = makeContext({
+		params: clientParams({ operation: 'verifyEmail', email: 'jane@acme.com', options: { clientId: 42 } }),
+		request: stubResponse(200, validResult),
+	});
+	await node.execute.call(ctx);
+	assert.deepEqual(ctx.calls[0].options.headers, { 'X-Client-Id': '42' });
+});
+
+test('Client ID from an expression string is normalised', async () => {
+	const ctx = makeContext({
+		params: clientParams({ operation: 'accountStatus', options: { clientId: ' 7 ' } }),
+		request: stubResponse(200, {}),
+	});
+	await node.execute.call(ctx);
+	assert.deepEqual(ctx.calls[0].options.headers, { 'X-Client-Id': '7' });
+});
+
+test('Client ID is sent per item and on job polling', async () => {
+	const ids = [5, 0];
+	const ctx = makeContext({
+		items: [{ json: {} }, { json: {} }],
+		params: (name, i) =>
+			({ operation: 'getJob', jobId: 'abc', splitResults: false, options: { clientId: ids[i] } })[name],
+		request: stubResponse(200, { id: 'abc', status: 'processing' }),
+	});
+	await node.execute.call(ctx);
+	assert.deepEqual(ctx.calls[0].options.headers, { 'X-Client-Id': '5' });
+	assert.equal(ctx.calls[1].options.headers, undefined);
+	assert.match(ctx.calls[0].options.url, /\/v1\/verify\/jobs\/abc$/);
+});
+
+test('invalid Client ID fails before any request', async () => {
+	const ctx = makeContext({
+		params: clientParams({ operation: 'accountStatus', options: { clientId: 'abc' } }),
+		request: stubResponse(200, {}),
+	});
+	await assert.rejects(() => node.execute.call(ctx), /Client ID must be a positive whole number/);
+	assert.equal(ctx.calls.length, 0);
+});
+
+for (const [status, code, text] of [
+	[404, 'client_not_found', /Client ID/],
+	[400, 'client_id_not_allowed', /Client ID/],
+	[403, 'forbidden', /Client ID/],
+]) {
+	test(`${status} ${code} names the Client ID field`, async () => {
+		const ctx = makeContext({
+			params: clientParams({ operation: 'accountStatus', options: { clientId: 9 } }),
+			request: stubResponse(status, { error: { code, message: 'x' } }),
+		});
+		await assert.rejects(() => node.execute.call(ctx), text);
+	});
+}
+
+test('404 without client_not_found keeps the job message', async () => {
+	const ctx = makeContext({
+		params: clientParams({ operation: 'getJob', jobId: 'abc', splitResults: false }),
+		request: stubResponse(404, { error: { code: 'not_found', message: 'x' } }),
+	});
+	await assert.rejects(() => node.execute.call(ctx), /No such job/);
+});

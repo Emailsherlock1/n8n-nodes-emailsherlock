@@ -53,6 +53,26 @@ Reads a job by its **Job ID**. Returns the status and, once the job completed, t
 
 Reads the credit balance, the key's rate-limit window and the plan. Spends no credits, so it is also the cheapest way to check that a key works (this is what the credential test uses).
 
+## Options
+
+| Field | Operations | Meaning |
+|---|---|---|
+| Client ID | All | The numeric ID of one of your tenants. Only for a provider account's key. Leave it empty to work in the key's own account. |
+
+### Working for a tenant
+
+If your key belongs to a provider account, set **Options > Client ID** to the numeric ID of one of your tenants. The node then sends the `X-Client-Id` header and the call runs inside that tenant: usage, verification jobs (and their refunds), deliverability addresses and Guard events land there. Without the field the key works in its own account, as before.
+
+The field accepts an expression, so one credential can serve every tenant, for example `{{ $json.tenantId }}` per input item. When the field is empty or 0 the node sends no header at all.
+
+A job belongs to the tenant it was submitted for. Set the same Client ID on **Get Verification Job** (and on any polling step) that you used on **Submit Verification Job**.
+
+Error cases:
+
+- `404 client_not_found`: the ID does not exist or your key cannot reach it. The node reports an unknown Client ID.
+- `403 forbidden`: the tenant is blocked from the API.
+- `400 client_id_not_allowed`: the key is not a provider key. The API rejects the header even when it is empty, so leave the field empty.
+
 ## Output fields
 
 | Field | Type | Meaning |
@@ -114,6 +134,9 @@ The retried call is answered from cache once the background probe finished, so i
 |---|---|---|
 | 401 / 403 | `unauthorized` | Fails with a hint to check the credential |
 | 402 | `insufficient_credits` | Fails with a hint to top up at [emailsherlock.com/api](https://emailsherlock.com/api) |
+| 404 | `client_not_found` | Fails and names the Client ID field |
+| 400 | `client_id_not_allowed` | Fails and names the Client ID field |
+| 403 | `forbidden` | Fails and says the tenant is blocked |
 | 429 | `rate_limit_exceeded` | Fails and reports the `Retry-After` wait time in seconds |
 | 503 | `verify_unavailable` | Fails; the API refunded the credits for the call, retry later |
 
