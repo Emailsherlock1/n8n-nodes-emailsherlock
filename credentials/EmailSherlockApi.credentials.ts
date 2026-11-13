@@ -12,7 +12,7 @@ export class EmailSherlockApi implements ICredentialType {
 
 	// Full URL on purpose: community credentials link their own docs, not docs.n8n.io.
 	// eslint-disable-next-line n8n-nodes-base/cred-class-field-documentation-url-miscased
-	documentationUrl = 'https://emailsherlock.com/api/docs';
+	documentationUrl = 'https://www.hostsherlock.com/api/docs';
 
 	properties: INodeProperties[] = [
 		{
@@ -23,7 +23,7 @@ export class EmailSherlockApi implements ICredentialType {
 			default: '',
 			required: true,
 			description:
-				'Your EmailSherlock API key. Live keys start with es_live_, sandbox keys with es_test_. Create one at https://emailsherlock.com/api.',
+				'Your EmailSherlock API key. Live keys start with es_live_, sandbox keys with es_test_. Create one at https://www.hostsherlock.com/api.',
 		},
 	];
 

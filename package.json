@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-emailsherlock",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "n8n community node for the EmailSherlock email verification API.",
   "keywords": [
     "n8n-community-node-package",
@@ -13,11 +13,11 @@
     "disposable"
   ],
   "license": "MIT",
-  "homepage": "https://emailsherlock.com/api",
+  "homepage": "https://www.hostsherlock.com/api",
   "author": {
     "name": "EmailSherlock",
-    "url": "https://emailsherlock.com",
-    "email": "service@emailsherlock.com"
+    "url": "https://www.hostsherlock.com",
+    "email": "service@hostsherlock.com"
   },
   "repository": {
     "type": "git",

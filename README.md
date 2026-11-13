@@ -1,6 +1,6 @@
 # n8n-nodes-emailsherlock
 
-n8n community node for the [EmailSherlock](https://emailsherlock.com/api) email verification API. It checks whether an address can receive mail (syntax, MX, SMTP probe) and returns reputation data about the domain behind it.
+n8n community node for the [EmailSherlock](https://www.hostsherlock.com/api) email verification API. It checks whether an address can receive mail (syntax, MX, SMTP probe) and returns reputation data about the domain behind it.
 
 [n8n](https://n8n.io/) is a fair-code licensed workflow automation tool.
 
@@ -16,7 +16,7 @@ See the [n8n community nodes guide](https://docs.n8n.io/integrations/community-n
 
 ## Credentials
 
-Create an API key at [emailsherlock.com/api](https://emailsherlock.com/api), then add an **EmailSherlock API** credential in n8n and paste the key.
+Create an API key at [hostsherlock.com/api](https://www.hostsherlock.com/api), then add an **EmailSherlock API** credential in n8n and paste the key.
 
 Two key types exist:
 
@@ -91,7 +91,7 @@ The `domain` object:
 | `domain.dnssec` | string or null | `secure`, `insecure` or `bogus` |
 | `domain.caa` | boolean or null | A CAA record restricts certificate issuance |
 
-Full reference: [emailsherlock.com/api/docs](https://emailsherlock.com/api/docs) and the machine-readable [OpenAPI spec](https://api.emailsherlock.com/v1/openapi.json).
+Full reference: [hostsherlock.com/api/docs](https://www.hostsherlock.com/api/docs) and the machine-readable [OpenAPI spec](https://api.emailsherlock.com/v1/openapi.json).
 
 ## Retrying transient results
 
@@ -113,7 +113,7 @@ The retried call is answered from cache once the background probe finished, so i
 | HTTP status | API code | What the node does |
 |---|---|---|
 | 401 / 403 | `unauthorized` | Fails with a hint to check the credential |
-| 402 | `insufficient_credits` | Fails with a hint to top up at [emailsherlock.com/api](https://emailsherlock.com/api) |
+| 402 | `insufficient_credits` | Fails with a hint to top up at [hostsherlock.com/api](https://www.hostsherlock.com/api) |
 | 429 | `rate_limit_exceeded` | Fails and reports the `Retry-After` wait time in seconds |
 | 503 | `verify_unavailable` | Fails; the API refunded the credits for the call, retry later |
 
@@ -139,7 +139,7 @@ Sandbox responses carry the `X-Sandbox: true` header and never spend credits.
 
 ## Why verify before sending
 
-Bounced mail damages your sender reputation. Verifying a list before a campaign keeps hard bounces out and flags risky categories (disposable, role, catch-all) so you can decide what to do with them. You can [verify an email address](https://emailsherlock.com/verify) manually on the EmailSherlock site to see the same checks this node runs.
+Bounced mail damages your sender reputation. Verifying a list before a campaign keeps hard bounces out and flags risky categories (disposable, role, catch-all) so you can decide what to do with them. You can [verify an email address](https://www.hostsherlock.com/verify) manually on the EmailSherlock site to see the same checks this node runs.
 
 ## License
 
