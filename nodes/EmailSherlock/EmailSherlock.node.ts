@@ -52,11 +52,11 @@ async function apiRequest(
 
 	if (statusCode === 401 || statusCode === 403) {
 		message = 'The API key was rejected';
-		description = 'Check the EmailSherlock credential. Keys are managed at emailsherlock.com/api.';
+		description = 'Check the EmailSherlock credential. Keys are managed at hostsherlock.com/api.';
 	} else if (statusCode === 402) {
 		message = 'Not enough credits for this request';
 		description =
-			'The API returned insufficient_credits. Top up or upgrade your plan at emailsherlock.com/api.';
+			'The API returned insufficient_credits. Top up or upgrade your plan at hostsherlock.com/api.';
 	} else if (statusCode === 404) {
 		message = 'No such job';
 		description = 'The job id is unknown for this account, or the job expired (7-day retention).';
