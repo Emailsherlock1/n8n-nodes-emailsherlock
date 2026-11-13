@@ -41,9 +41,8 @@ Batch requests skip the live SMTP probe: addresses that need it answer `result=u
 
 For larger lists that need definitive inbox verdicts. Unlike Verify Batch, a job runs every address through the full pipeline including the SMTP probe, so the results carry real `valid`/`invalid` verdicts instead of `verification_pending`. Accepts up to 10000 addresses, charged per address at submit. Addresses that cannot be processed are refunded automatically.
 
-- **Wait for Completion** (default on): the node polls the job until it finishes and returns the results directly. **Max Wait** caps the polling; a job larger than the budget returns still processing, and you poll **Get Verification Job** yourself afterwards.
-- Turn **Wait for Completion** off to return the job id immediately. Drive the polling yourself, for example with a **Wait** node followed by **Get Verification Job** (the n8n-idiomatic pattern for long jobs).
-- **Split Results Into Items** (default on): one output item per address, in submit order. Off returns the whole job object (`id`, `status`, `progress`, `results`).
+- The node returns right after the submit and does not wait for the job. A live job comes back with `status=processing` and its `id`. Poll it yourself, for example with a **Wait** node followed by **Get Verification Job** (the n8n-idiomatic pattern for long jobs). A sandbox key answers `completed` with the results inline.
+- **Split Results Into Items** (default on): one output item per address, in submit order, once the job has results. Off, or while the job is still processing, the node returns the whole job object (`id`, `status`, `progress`, `results`).
 
 ### Get Verification Job
 
